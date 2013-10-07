@@ -2,12 +2,13 @@
  * regHistory - history.js registration plug-in -- needs history.js, of course.
  * 2013 - Samuel Rouse
  *
- * Allows multiple interface elements to easily share the history.js interface.
- * Only uses the query string rather than full URL updates.
+ * Allows multiple interface elements to easily share history.js on a page.
+ * Only uses query strings, no full URL updates/replacements.
  * Falls back to hash changes if you use the HTML4 support version of history.
  *
  * 2013-08-13 - initial version
- * 2013-08-29 - cleanup, better comments & Examples
+ * 2013-08-29 - cleanup, better comments & examples
+ * 2013-10-04 - Made regHistory.method(...) rather than regHistory(method,...)
  *
  * Use register to add a key, an optional value, and a callback for changes to that key.
  * Register also supports objects being passes as KVPs.
@@ -27,19 +28,17 @@
  * UPDATE EXAMPLES:
  * 
  * #1: Add a new history state for a change to the infoTab.
- * regHistory( "updatePush", "infoTab", 2);
+ * regHistory.updatePush( "infoTab", 2);
  *
  * #2: Update the URL to match changes to the product data.
- * regHistory( "updateReplace", "product", { "color": "red", "size": "medium" });
+ * regHistory.updateReplace( "product", { "color": "red", "size": "medium" });
  *
  * #3: Set a new history state while updating multiple keys at once.
- * regHistory( "updatePush", { "color": "black", "size": "small", "infoTab": 1 });
+ * regHistory.updatePush({ "color": "black", "size": "small", "infoTab": 1 });
  *
  */
  
-/* global History */
- 
- ;(function(w, $, undefined){
+ ;(function(window, $, History, undefined){
 	"use strict";
 	var registeredKeys = {},
 		callbacks = {},
@@ -47,17 +46,18 @@
 		pushState = function(){
 			/*
 			 * Merge the current state and the registered keys, 
-			 * so we don't wipe someone else's params
+			 * so we don't wipe someone else's parameters
 			 * Then pushState
 			 */
 			var newState = $.extend( {}, methods.fetchState(), registeredKeys );
 			// Push to History
 			History.pushState(null,pageTitle,"?" + methods.getQueryFromObj(newState));
 		},
+		
 		replaceState = function(){
 			/*
 			 * Merge the current state and the registered keys, 
-			 * so we don't wipe someone else's params
+			 * so we don't wipe someone else's parameters
 			 * Then pushState
 			 */
 			var newState = $.extend( {}, methods.fetchState(), registeredKeys );
@@ -67,7 +67,8 @@
 		/*
 		 * Can only update registered keys, will error/roll back if not
 		 */
-		update: function (key, val, trigger) {
+		update = function (key, val, trigger) {
+
 			var b_reg = $.extend(true,{},registeredKeys),		// Backup of the keys
 				returnState = true;			// Return state
 			
@@ -224,7 +225,7 @@
 				}
 			},
 			updateReplace: function() {
-				if ( update.apply(this, arguments)  ) {
+				if ( update.apply(this, arguments) ) {
 					replaceState();
 				}
 			},
@@ -255,20 +256,34 @@
 					}
 				}
 			}
-		};
+		},
+		/*
+		 * Allows us to increment methods for convenient public access
+		 */
+		publicizeMethod = function (method) {
+			window.regHistory[method] = function(){
+				return methods[method].apply( null, arguments );
+			};
+		},
+		method;
 		
-		// Catch changes someone else makes.
-		// May need to register hash change here?
-		History.Adapter.bind(window,'statechange',methods.notify);
+	// Catch changes someone else makes.
+	// May need to register hash change here?
+	History.Adapter.bind(window,'statechange',methods.notify);
 
-		w.regHistory = function( method ) {
-			
-			if ( method in methods ) {
-				methods[method].apply(this, Array.prototype.slice.call(arguments, 1));
-			} else {
-				// Empty or bad request gets current state
-				return methods.fetchState();
-			}
-		};
+	window.regHistory = function( method ) {
 		
-}(window, jQuery));
+		if ( method in methods ) {
+			methods[method].apply(this, Array.prototype.slice.call(arguments, 1));
+		} else {
+			// Empty or bad request gets current state
+			return methods.fetchState();
+		}
+	};
+	
+	// Publicize the methods, better that the slice.call pattern above
+	for ( method in methods ) {
+		if ( methods.hasOwnProperty(method) ) { publicizeMethod(method); }
+	}
+	
+}(window, jQuery, History));
